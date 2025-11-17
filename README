@@ -1,0 +1,33 @@
+# PCSYSTEM Backend
+
+Backend API para el sistema PCSYSTEM de gestión de PC.
+
+## Instalación
+
+```bash
+npm install
+```
+
+## Desarrollo
+
+```bash
+npm run dev
+```
+
+## Producción
+
+```bash
+npm start
+```
+
+## Endpoints
+
+- `GET /` - Estado del servidor
+- `GET /api/health` - Health check
+
+## Tecnologías
+
+- Node.js
+- Express.js
+- CORS
+- dotenv
