@@ -663,6 +663,300 @@ app.post('/api/contact', async (req, res) => {
 // RUTAS DE ESTADÍSTICAS
 // ============================================
 
+// ============================================
+// RUTAS DE CARRITO / E-COMMERCE
+// ============================================
+
+// Crear carrito (opcionalmente vinculado a cliente)
+app.post('/api/carritos', async (req, res) => {
+    try {
+        const { cliente_id } = req.body;
+
+        const { data, error } = await supabase
+            .from('carritos')
+            .insert([{ cliente_id }])
+            .select();
+
+        if (error) throw error;
+        res.status(201).json(data[0]);
+    } catch (error) {
+        console.error('Error creando carrito:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Obtener (o crear) carrito pendiente de un cliente
+app.get('/api/clientes/:clienteId/carrito', async (req, res) => {
+    try {
+        const { clienteId } = req.params;
+
+        // Buscar carrito pendiente
+        const { data: existing, error: existingError } = await supabase
+            .from('carritos')
+            .select('*')
+            .eq('cliente_id', clienteId)
+            .eq('estado', 'pendiente')
+            .limit(1)
+            .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (existing) {
+            return res.json(existing);
+        }
+
+        // Crear nuevo carrito
+        const { data, error } = await supabase
+            .from('carritos')
+            .insert([{ cliente_id: clienteId }])
+            .select();
+
+        if (error) throw error;
+        res.status(201).json(data[0]);
+    } catch (error) {
+        console.error('Error obteniendo/creando carrito del cliente:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Obtener carrito con items y datos de producto
+app.get('/api/carritos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { data: cart, error: cartError } = await supabase
+            .from('carritos')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (cartError) throw cartError;
+
+        const { data: items, error: itemsError } = await supabase
+            .from('detalle_carrito')
+            .select('*')
+            .eq('carrito_id', id);
+
+        if (itemsError) throw itemsError;
+
+        // Enriquecer items con datos de Productos
+        const productoIds = items.map(i => i.producto_id);
+        let productsMap = {};
+        if (productoIds.length > 0) {
+            const { data: products } = await supabase
+                .from('Productos')
+                .select('*')
+                .in('id', productoIds);
+
+            productsMap = (products || []).reduce((acc, p) => {
+                acc[p.id] = p; return acc;
+            }, {});
+        }
+
+        const enriched = items.map(i => ({
+            ...i,
+            producto: productsMap[i.producto_id] || null
+        }));
+
+        res.json({ cart, items: enriched });
+    } catch (error) {
+        console.error('Error obteniendo carrito:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Añadir o actualizar item en carrito
+app.post('/api/carritos/:id/items', async (req, res) => {
+    try {
+        const { id } = req.params; // carrito id
+        const { producto_id, cantidad } = req.body;
+
+        if (!producto_id || !cantidad) {
+            return res.status(400).json({ error: 'producto_id y cantidad son requeridos' });
+        }
+
+        // Obtener precio actual del producto
+        const { data: product, error: productError } = await supabase
+            .from('Productos')
+            .select('PRECIO')
+            .eq('id', producto_id)
+            .single();
+
+        if (productError) throw productError;
+
+        const precio_unitario = typeof product.PRECIO === 'string' ? parseInt(product.PRECIO.replace(/[^\d]/g, '')) : product.PRECIO;
+
+        // Verificar si item ya existe
+        const { data: existing, error: existingError } = await supabase
+            .from('detalle_carrito')
+            .select('*')
+            .eq('carrito_id', id)
+            .eq('producto_id', producto_id)
+            .limit(1)
+            .maybeSingle();
+
+        if (existingError) throw existingError;
+
+        if (existing) {
+            // Actualizar cantidad
+            const newCantidad = existing.cantidad + cantidad;
+            const { data, error } = await supabase
+                .from('detalle_carrito')
+                .update({ cantidad: newCantidad })
+                .eq('id', existing.id)
+                .select();
+
+            if (error) throw error;
+            return res.json(data[0]);
+        }
+
+        // Insertar nuevo item
+        const { data, error } = await supabase
+            .from('detalle_carrito')
+            .insert([{
+                carrito_id: id,
+                producto_id,
+                cantidad,
+                precio_unitario
+            }])
+            .select();
+
+        if (error) throw error;
+        res.status(201).json(data[0]);
+    } catch (error) {
+        console.error('Error añadiendo item al carrito:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Actualizar cantidad de item
+app.put('/api/carritos/:id/items/:itemId', async (req, res) => {
+    try {
+        const { id, itemId } = req.params;
+        const { cantidad } = req.body;
+
+        if (cantidad === undefined) return res.status(400).json({ error: 'cantidad requerida' });
+
+        const { data, error } = await supabase
+            .from('detalle_carrito')
+            .update({ cantidad })
+            .eq('id', itemId)
+            .eq('carrito_id', id)
+            .select();
+
+        if (error) throw error;
+        res.json(data[0]);
+    } catch (error) {
+        console.error('Error actualizando item:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Eliminar item del carrito
+app.delete('/api/carritos/:id/items/:itemId', async (req, res) => {
+    try {
+        const { id, itemId } = req.params;
+
+        const { error } = await supabase
+            .from('detalle_carrito')
+            .delete()
+            .eq('id', itemId)
+            .eq('carrito_id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error eliminando item:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Aplicar código de descuento al carrito (no marca como usado automáticamente)
+app.post('/api/carritos/:id/apply-discount', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { codigo } = req.body;
+
+        if (!codigo) return res.status(400).json({ error: 'codigo requerido' });
+
+        const { data: descuento, error: descError } = await supabase
+            .from('descuentos_productos')
+            .select('*')
+            .eq('codigo', codigo)
+            .maybeSingle();
+
+        if (descError) throw descError;
+        if (!descuento) return res.status(404).json({ error: 'Código no encontrado' });
+
+        // Verificar validez temporal
+        const ahora = new Date();
+        if (descuento.valido_desde && new Date(descuento.valido_desde) > ahora) return res.status(400).json({ error: 'Código no válido aún' });
+        if (descuento.valido_hasta && new Date(descuento.valido_hasta) < ahora) return res.status(400).json({ error: 'Código expirado' });
+
+        // Calcular total del carrito
+        const { data: items } = await supabase
+            .from('detalle_carrito')
+            .select('*')
+            .eq('carrito_id', id);
+
+        const subtotal = (items || []).reduce((sum, it) => sum + (it.precio_unitario * it.cantidad), 0);
+        const descuentoMonto = Math.round(subtotal * (descuento.porcentaje / 100));
+        const total = subtotal - descuentoMonto;
+
+        res.json({ subtotal, descuento: descuentoMonto, total, descuento_id: descuento.id });
+    } catch (error) {
+        console.error('Error aplicando descuento:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Checkout (crea pago y envio; no integra con pasarela real aquí)
+app.post('/api/carritos/:id/checkout', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { metodo, envio } = req.body; // envio: { direccion, courier }
+
+        // Obtener items
+        const { data: items, error: itemsError } = await supabase
+            .from('detalle_carrito')
+            .select('*')
+            .eq('carrito_id', id);
+
+        if (itemsError) throw itemsError;
+
+        const monto_total = (items || []).reduce((sum, it) => sum + (it.precio_unitario * it.cantidad), 0);
+
+        // Crear pago
+        const { data: pago, error: pagoError } = await supabase
+            .from('pagos')
+            .insert([{ carrito_id: id, monto_total, metodo, estado: 'pendiente' }])
+            .select();
+
+        if (pagoError) throw pagoError;
+
+        // Crear envio si se proporcionó
+        let envioData = null;
+        if (envio && envio.direccion) {
+            const { data: env, error: envError } = await supabase
+                .from('envios')
+                .insert([{ carrito_id: id, direccion: envio.direccion, courier: envio.courier || null }])
+                .select();
+
+            if (envError) throw envError;
+            envioData = env[0];
+        }
+
+        // Actualizar estado del carrito a 'pagado' (puedes cambiar a 'procesando' hasta confirmación real)
+        await supabase.from('carritos').update({ estado: 'pagado' }).eq('id', id);
+
+        res.json({ pago: pago[0], envio: envioData });
+    } catch (error) {
+        console.error('Error en checkout:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
 // Obtener productos con bajo stock
 app.get('/api/pcs/low-stock', async (req, res) => {
     try {
@@ -697,6 +991,560 @@ app.get('/api/pcs/top-selling', async (req, res) => {
         res.json(data);
     } catch (error) {
         console.error('Error obteniendo productos más vendidos:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Descuentos por Producto Routes
+// ============================================
+
+// Obtener todos los descuentos de productos
+app.get('/api/descuentos-productos', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('descuentos_productos')
+            .select(`
+                *,
+                producto:producto_id (
+                    id,
+                    NOMBRE,
+                    PRECIO,
+                    IMAGENES
+                )
+            `);
+
+        if (error) throw error;
+        res.json(data || []);
+    } catch (error) {
+        console.error('Error obteniendo descuentos:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Crear descuento de producto
+app.post('/api/descuentos-productos', async (req, res) => {
+    try {
+        const { producto_id, porcentaje, fecha_inicio, fecha_fin } = req.body;
+
+        if (!producto_id || !porcentaje) {
+            return res.status(400).json({ error: 'Faltan datos requeridos (producto_id, porcentaje)' });
+        }
+
+        // Verificar si ya existe un descuento para este producto
+        const { data: existing } = await supabase
+            .from('descuentos_productos')
+            .select('*')
+            .eq('producto_id', producto_id)
+            .maybeSingle();
+
+        if (existing) {
+            return res.status(400).json({ 
+                error: 'Ya existe un descuento para este producto. Edita el existente.' 
+            });
+        }
+
+        const insertData = {
+            producto_id,
+            porcentaje
+        };
+
+        if (fecha_inicio) insertData.fecha_inicio = fecha_inicio;
+        if (fecha_fin) insertData.fecha_fin = fecha_fin;
+
+        const { data, error } = await supabase
+            .from('descuentos_productos')
+            .insert(insertData)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Error creando descuento:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Actualizar descuento de producto
+app.put('/api/descuentos-productos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { porcentaje, fecha_inicio, fecha_fin } = req.body;
+
+        if (!porcentaje) {
+            return res.status(400).json({ error: 'El porcentaje es requerido' });
+        }
+
+        const updateData = { porcentaje };
+        if (fecha_inicio !== undefined) updateData.fecha_inicio = fecha_inicio || null;
+        if (fecha_fin !== undefined) updateData.fecha_fin = fecha_fin || null;
+
+        const { data, error } = await supabase
+            .from('descuentos_productos')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Error actualizando descuento:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Eliminar descuento de producto
+app.delete('/api/descuentos-productos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { error } = await supabase
+            .from('descuentos_productos')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error eliminando descuento:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Packs Routes
+// ============================================
+
+// Obtener todos los packs
+app.get('/api/packs', async (req, res) => {
+    try {
+        const { data: packs, error: packsError } = await supabase
+            .from('packs')
+            .select('*');
+
+        if (packsError) throw packsError;
+
+        // Para cada pack, obtener sus productos
+        const packsWithProducts = await Promise.all(
+            packs.map(async (pack) => {
+                const { data: items, error: itemsError } = await supabase
+                    .from('pack_productos')
+                    .select(`
+                        *,
+                        producto:producto_id (
+                            id,
+                            NOMBRE,
+                            PRECIO,
+                            IMAGENES
+                        )
+                    `)
+                    .eq('pack_id', pack.id);
+
+                if (itemsError) throw itemsError;
+
+                return {
+                    ...pack,
+                    productos: items || []
+                };
+            })
+        );
+
+        res.json(packsWithProducts);
+    } catch (error) {
+        console.error('Error obteniendo packs:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Crear pack
+app.post('/api/packs', async (req, res) => {
+    try {
+        const { nombre, descripcion, precio, productos } = req.body;
+
+        if (!nombre || !precio || !productos || productos.length === 0) {
+            return res.status(400).json({ error: 'Faltan datos requeridos' });
+        }
+
+        // Crear el pack
+        const { data: pack, error: packError } = await supabase
+            .from('packs')
+            .insert({
+                nombre,
+                descripcion,
+                precio
+            })
+            .select()
+            .single();
+
+        if (packError) throw packError;
+
+        // Insertar productos del pack
+        const packProductos = productos.map(p => ({
+            pack_id: pack.id,
+            producto_id: p.producto_id,
+            cantidad: p.cantidad
+        }));
+
+        const { error: itemsError } = await supabase
+            .from('pack_productos')
+            .insert(packProductos);
+
+        if (itemsError) throw itemsError;
+
+        res.json(pack);
+    } catch (error) {
+        console.error('Error creando pack:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Actualizar pack
+app.put('/api/packs/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, descripcion, precio, productos } = req.body;
+
+        // Actualizar pack
+        const updateData = {};
+        if (nombre !== undefined) updateData.nombre = nombre;
+        if (descripcion !== undefined) updateData.descripcion = descripcion;
+        if (precio !== undefined) updateData.precio = precio;
+
+        const { data: pack, error: packError } = await supabase
+            .from('packs')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (packError) throw packError;
+
+        // Si hay productos, actualizar
+        if (productos) {
+            // Eliminar productos existentes
+            await supabase
+                .from('pack_productos')
+                .delete()
+                .eq('pack_id', id);
+
+            // Insertar nuevos productos
+            const packProductos = productos.map(p => ({
+                pack_id: id,
+                producto_id: p.producto_id,
+                cantidad: p.cantidad
+            }));
+
+            const { error: itemsError } = await supabase
+                .from('pack_productos')
+                .insert(packProductos);
+
+            if (itemsError) throw itemsError;
+        }
+
+        res.json(pack);
+    } catch (error) {
+        console.error('Error actualizando pack:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Eliminar pack
+app.delete('/api/packs/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Primero eliminar productos del pack
+        await supabase
+            .from('pack_productos')
+            .delete()
+            .eq('pack_id', id);
+
+        // Luego eliminar el pack
+        const { error } = await supabase
+            .from('packs')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error eliminando pack:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Cupones Routes
+// ============================================
+
+// Obtener todos los cupones
+app.get('/api/cupones', async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('cupones')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json(data || []);
+    } catch (error) {
+        console.error('Error obteniendo cupones:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Crear cupón
+app.post('/api/cupones', async (req, res) => {
+    try {
+        const { 
+            codigo, 
+            tipo_descuento, 
+            valor_descuento, 
+            uso_unico,
+            usos_maximos,
+            fecha_inicio,
+            fecha_fin,
+            activo
+        } = req.body;
+
+        if (!codigo || !tipo_descuento || !valor_descuento) {
+            return res.status(400).json({ error: 'Faltan datos requeridos' });
+        }
+
+        // Verificar si el código ya existe
+        const { data: existing } = await supabase
+            .from('cupones')
+            .select('*')
+            .eq('codigo', codigo.toUpperCase())
+            .single();
+
+        if (existing) {
+            return res.status(400).json({ 
+                error: 'Ya existe un cupón con este código' 
+            });
+        }
+
+        const { data, error } = await supabase
+            .from('cupones')
+            .insert({
+                codigo: codigo.toUpperCase(),
+                tipo_descuento,
+                valor_descuento,
+                uso_unico: uso_unico || false,
+                usos_maximos: usos_maximos || null,
+                usos_actuales: 0,
+                fecha_inicio: fecha_inicio || null,
+                fecha_fin: fecha_fin || null,
+                activo: activo !== undefined ? activo : true
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Error creando cupón:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Actualizar cupón
+app.put('/api/cupones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { 
+            codigo,
+            tipo_descuento, 
+            valor_descuento, 
+            uso_unico,
+            usos_maximos,
+            fecha_inicio,
+            fecha_fin,
+            activo
+        } = req.body;
+
+        const updateData = {};
+        if (codigo !== undefined) updateData.codigo = codigo.toUpperCase();
+        if (tipo_descuento !== undefined) updateData.tipo_descuento = tipo_descuento;
+        if (valor_descuento !== undefined) updateData.valor_descuento = valor_descuento;
+        if (uso_unico !== undefined) updateData.uso_unico = uso_unico;
+        if (usos_maximos !== undefined) updateData.usos_maximos = usos_maximos;
+        if (fecha_inicio !== undefined) updateData.fecha_inicio = fecha_inicio;
+        if (fecha_fin !== undefined) updateData.fecha_fin = fecha_fin;
+        if (activo !== undefined) updateData.activo = activo;
+
+        const { data, error } = await supabase
+            .from('cupones')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (error) {
+        console.error('Error actualizando cupón:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Eliminar cupón
+app.delete('/api/cupones/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { error } = await supabase
+            .from('cupones')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error eliminando cupón:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Validar cupón
+app.post('/api/cupones/validar', async (req, res) => {
+    try {
+        const { codigo } = req.body;
+
+        if (!codigo) {
+            return res.status(400).json({ error: 'Código requerido' });
+        }
+
+        const { data: cupon, error } = await supabase
+            .from('cupones')
+            .select('*')
+            .eq('codigo', codigo.toUpperCase())
+            .single();
+
+        if (error || !cupon) {
+            return res.status(404).json({ error: 'Cupón no encontrado' });
+        }
+
+        // Validaciones
+        if (!cupon.activo) {
+            return res.status(400).json({ error: 'Cupón inactivo' });
+        }
+
+        const now = new Date();
+        if (cupon.fecha_inicio && new Date(cupon.fecha_inicio) > now) {
+            return res.status(400).json({ error: 'Cupón aún no válido' });
+        }
+
+        if (cupon.fecha_fin && new Date(cupon.fecha_fin) < now) {
+            return res.status(400).json({ error: 'Cupón expirado' });
+        }
+
+        if (cupon.uso_unico && cupon.usos_actuales > 0) {
+            return res.status(400).json({ error: 'Cupón ya utilizado' });
+        }
+
+        if (cupon.usos_maximos && cupon.usos_actuales >= cupon.usos_maximos) {
+            return res.status(400).json({ error: 'Cupón sin usos disponibles' });
+        }
+
+        res.json({ 
+            valid: true, 
+            cupon: {
+                tipo_descuento: cupon.tipo_descuento,
+                valor_descuento: cupon.valor_descuento
+            }
+        });
+    } catch (error) {
+        console.error('Error validando cupón:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// Estadísticas Routes
+// ============================================
+
+// Obtener estadísticas de cupones
+app.get('/api/estadisticas/cupones', async (req, res) => {
+    try {
+        const { data: cupones, error } = await supabase
+            .from('cupones')
+            .select('*')
+            .order('usos_actuales', { ascending: false });
+
+        if (error) throw error;
+
+        const estadisticas = {
+            total_cupones: cupones.length,
+            cupones_activos: cupones.filter(c => c.activo).length,
+            total_usos: cupones.reduce((sum, c) => sum + (c.usos_actuales || 0), 0),
+            cupones_mas_usados: cupones.slice(0, 5),
+            cupones_por_tipo: {
+                porcentaje: cupones.filter(c => c.tipo_descuento === 'porcentaje').length,
+                fijo: cupones.filter(c => c.tipo_descuento === 'fijo').length
+            }
+        };
+
+        res.json(estadisticas);
+    } catch (error) {
+        console.error('Error obteniendo estadísticas de cupones:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Obtener estadísticas de packs
+app.get('/api/estadisticas/packs', async (req, res) => {
+    try {
+        // Obtener todos los packs
+        const { data: packs, error: packsError } = await supabase
+            .from('packs')
+            .select('*');
+
+        if (packsError) throw packsError;
+
+        // Obtener ventas con packs (esto requeriría una tabla de ventas)
+        // Por ahora retornamos estadísticas básicas
+        const estadisticas = {
+            total_packs: packs.length,
+            packs_activos: packs.filter(p => p.activo).length,
+            precio_promedio: packs.reduce((sum, p) => sum + p.precio_pack, 0) / (packs.length || 1)
+        };
+
+        res.json(estadisticas);
+    } catch (error) {
+        console.error('Error obteniendo estadísticas de packs:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Obtener estadísticas de descuentos
+app.get('/api/estadisticas/descuentos', async (req, res) => {
+    try {
+        const { data: descuentos, error } = await supabase
+            .from('descuentos_productos')
+            .select(`
+                *,
+                producto:id_producto (
+                    id,
+                    NOMBRE,
+                    PRECIO
+                )
+            `);
+
+        if (error) throw error;
+
+        const estadisticas = {
+            total_descuentos: descuentos.length,
+            descuentos_activos: descuentos.filter(d => d.activo).length,
+            descuento_promedio: descuentos.reduce((sum, d) => sum + d.porcentaje_descuento, 0) / (descuentos.length || 1),
+            productos_con_descuento: descuentos.filter(d => d.activo).length
+        };
+
+        res.json(estadisticas);
+    } catch (error) {
+        console.error('Error obteniendo estadísticas de descuentos:', error);
         res.status(500).json({ error: error.message });
     }
 });
