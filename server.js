@@ -72,6 +72,38 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Obtener productos destacados (MOVIDO AL INICIO PARA EVITAR CONFLICTOS)
+app.get('/api/pcs/featured', async (req, res) => {
+    try {
+        console.log('🔍 Buscando productos destacados...');
+        // Intentar obtener productos marcados como destacados
+        let { data, error } = await supabase
+            .from('Productos')
+            .select('*')
+            .eq('destacado', true)
+            .limit(10);
+
+        // Si hay error (ej: columna no existe) o no hay resultados, traer los últimos agregados
+        if (error || !data || data.length === 0) {
+            console.log('⚠️ No se encontraron destacados o error en columna, buscando últimos productos...');
+            const fallback = await supabase
+                .from('Productos')
+                .select('*')
+                .order('id', { ascending: false })
+                .limit(5);
+            
+            if (fallback.error) throw fallback.error;
+            data = fallback.data;
+        }
+
+        console.log(`✅ Encontrados ${data.length} productos destacados/recientes`);
+        res.json(data);
+    } catch (error) {
+        console.error('❌ Error obteniendo productos destacados:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // GET todos los productos (con paginación)
 app.get('/api/pcs', async (req, res) => {
     try {
@@ -263,6 +295,8 @@ app.put('/api/pcs/positions', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
 
 // Obtener productos relacionados
 app.get('/api/pcs/:id/related', async (req, res) => {
@@ -593,7 +627,7 @@ app.put('/api/pcs/positions', async (req, res) => {
 });
 
 // ============================================
-// RUTAS DE CONTACTO
+// CONTACTO
 // ============================================
 
 // Enviar mensaje de contacto
@@ -963,6 +997,7 @@ app.post('/api/carritos/:id/checkout', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 
 // Obtener productos con bajo stock
