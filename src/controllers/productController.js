@@ -250,23 +250,34 @@ const getById = async (req, res) => {
 
 const create = async (req, res) => {
     try {
-        const { NOMBRE, DETALLE, PRECIO, CATEGORIA, SUBCATEGORIA, STOCK, codigo_barra } = req.body;
+        const { NOMBRE, DETALLE, PRECIO, CATEGORIA, SUBCATEGORIA, STOCK, stock, codigo_barra, imageCropData, images, videos, mainImageIndex } = req.body;
         
         if (!NOMBRE) {
             return res.status(400).json({ error: 'NOMBRE es requerido' });
         }
 
+        // Construir objeto IMAGENES
+        const IMAGENES = {
+            images: images || [],
+            videos: videos || [],
+            mainImageIndex: mainImageIndex || 0,
+            imageCropData: imageCropData || {}
+        };
+
+        const newProduct = {
+            NOMBRE,
+            DETALLE,
+            PRECIO,
+            CATEGORIA,
+            SUBCATEGORIA,
+            STOCK: STOCK || stock || 0, // Manejar ambas mayúsculas/minúsculas
+            codigo_barra,
+            IMAGENES // Usar columna JSONB
+        };
+
         const { data, error } = await supabase
             .from('Productos')
-            .insert([{
-                NOMBRE,
-                DETALLE,
-                PRECIO,
-                CATEGORIA,
-                SUBCATEGORIA,
-                STOCK: STOCK || 0,
-                codigo_barra
-            }])
+            .insert([newProduct])
             .select();
 
         if (error) throw error;
@@ -286,16 +297,46 @@ const update = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
+        // Preparar objeto de actualización limpio
+        const cleanUpdates = {};
+
+        // Campos directos permitidos (Mayúsculas según DB)
+        const allowedFields = ['NOMBRE', 'DETALLE', 'PRECIO', 'CATEGORIA', 'SUBCATEGORIA', 'STOCK', 'codigo_barra', 'POSICION', 'NUM_VENTAS', 'destacado'];
+        
+        allowedFields.forEach(field => {
+            if (updates[field] !== undefined) {
+                cleanUpdates[field] = updates[field];
+            }
+        });
+
+        // Mapeo de campos especiales
+        if (updates.stock !== undefined) cleanUpdates.STOCK = updates.stock;
+
+        // Manejo de IMAGENES (JSONB)
+        // Si viene alguno de los campos de medios, actualizamos todo el objeto IMAGENES
+        if (updates.images || updates.videos || updates.mainImageIndex !== undefined || updates.imageCropData) {
+            cleanUpdates.IMAGENES = {
+                images: updates.images || [],
+                videos: updates.videos || [],
+                mainImageIndex: updates.mainImageIndex || 0,
+                imageCropData: updates.imageCropData || {}
+            };
+        } else if (updates.IMAGENES) {
+            // Si ya viene como objeto IMAGENES
+            cleanUpdates.IMAGENES = updates.IMAGENES;
+        }
+
         const { data, error } = await supabase
             .from('Productos')
-            .update(updates)
+            .update(cleanUpdates)
             .eq('id', id)
             .select();
 
         if (error) throw error;
+        
         res.json({ message: 'Producto actualizado', data: data[0] });
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error actualizando producto:', error);
         res.status(500).json({ error: error.message });
     }
 };

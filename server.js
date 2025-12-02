@@ -40,6 +40,7 @@ const contactRoutes = require('./src/routes/contactRoutes');
 const statsRoutes = require('./src/routes/statsRoutes');
 const salesRoutes = require('./src/routes/salesRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const discountRoutes = require('./src/routes/discountRoutes');
 
 // Usar Rutas
 app.use('/api/pcs', productRoutes);
@@ -50,6 +51,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/estadisticas', statsRoutes);
 app.use('/api/ventas', salesRoutes);
 app.use('/api/usuarios', userRoutes);
+app.use('/api/descuentos-productos', discountRoutes);
 
 // Rutas básicas
 app.get('/', (req, res) => {
