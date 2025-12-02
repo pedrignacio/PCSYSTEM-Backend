@@ -83,7 +83,7 @@ const search = async (req, res) => {
         let query = supabase.from('Productos').select('*', { count: 'exact' });
 
         if (q) {
-            query = query.or(`NOMBRE.ilike.%${q}%,DETALLE.ilike.%${q}%,CATEGORIA.ilike.%${q}%`);
+            query = query.or(`NOMBRE.ilike.%${q}%,DETALLE.ilike.%${q}%,CATEGORIA.ilike.%${q}%,codigo_barra.eq.${q}`);
         }
 
         if (category && category !== 'all') {
@@ -250,7 +250,7 @@ const getById = async (req, res) => {
 
 const create = async (req, res) => {
     try {
-        const { NOMBRE, DETALLE, PRECIO, CATEGORIA, SUBCATEGORIA, STOCK } = req.body;
+        const { NOMBRE, DETALLE, PRECIO, CATEGORIA, SUBCATEGORIA, STOCK, codigo_barra } = req.body;
         
         if (!NOMBRE) {
             return res.status(400).json({ error: 'NOMBRE es requerido' });
@@ -264,7 +264,8 @@ const create = async (req, res) => {
                 PRECIO,
                 CATEGORIA,
                 SUBCATEGORIA,
-                STOCK: STOCK || 0
+                STOCK: STOCK || 0,
+                codigo_barra
             }])
             .select();
 
