@@ -10,6 +10,7 @@ console.log("🔧 Diagnóstico de entorno:");
 console.log("- PORT:", process.env.PORT);
 console.log("- FRONTEND_URL:", process.env.FRONTEND_URL || "⚠️ Usando fallback localhost:3000");
 console.log("- MP_ACCESS_TOKEN:", process.env.MP_ACCESS_TOKEN ? "✅ Cargado" : "❌ NO ENCONTRADO");
+console.log("- SUPABASE_SERVICE_ROLE_KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY ? "✅ Cargado" : "❌ NO ENCONTRADO");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -38,6 +39,7 @@ const uploadRoutes = require('./src/routes/uploadRoutes');
 const contactRoutes = require('./src/routes/contactRoutes');
 const statsRoutes = require('./src/routes/statsRoutes');
 const salesRoutes = require('./src/routes/salesRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 
 // Usar Rutas
 app.use('/api/pcs', productRoutes);
@@ -47,6 +49,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/estadisticas', statsRoutes);
 app.use('/api/ventas', salesRoutes);
+app.use('/api/usuarios', userRoutes);
 
 // Rutas básicas
 app.get('/', (req, res) => {

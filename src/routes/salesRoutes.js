@@ -4,5 +4,7 @@ const salesController = require('../controllers/salesController');
 
 router.post('/', salesController.createSale);
 router.get('/hoy', salesController.getDailySales);
+router.get('/:id', salesController.getSaleById);
+router.post('/:id/cancel', salesController.cancelSale);
 
 module.exports = router;
