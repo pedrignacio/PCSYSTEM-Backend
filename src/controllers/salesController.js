@@ -209,11 +209,22 @@ const getDailySales = async (req, res) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
+        // Incluimos detalle_ventas en la consulta
         const { data: ventas, error } = await supabase
             .from('ventas')
-            .select('*')
+            .select(`
+                *,
+                detalle_ventas (
+                    id,
+                    nombre_producto,
+                    cantidad,
+                    precio_unitario,
+                    subtotal
+                )
+            `)
             .gte('fecha', today.toISOString())
-            .eq('estado', 'completada');
+            .eq('estado', 'completada')
+            .order('fecha', { ascending: false });
 
         if (error) throw error;
 

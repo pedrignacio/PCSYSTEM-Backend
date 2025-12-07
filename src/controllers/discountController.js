@@ -13,7 +13,7 @@ const getAllDiscounts = async (req, res) => {
                     IMAGENES
                 )
             `)
-            .order('creado_en', { ascending: false });
+            .order('id', { ascending: false });
 
         if (error) throw error;
 
@@ -51,10 +51,10 @@ const getDiscountById = async (req, res) => {
 
 const createDiscount = async (req, res) => {
     try {
-        const { producto_id, porcentaje, codigo, valido_desde, valido_hasta } = req.body;
+        const { producto_id, porcentaje, fecha_inicio, fecha_fin } = req.body;
 
         // Validaciones básicas
-        if (!producto_id || !porcentaje || !codigo) {
+        if (!producto_id || !porcentaje) {
             return res.status(400).json({ error: 'Faltan campos requeridos' });
         }
 
@@ -64,9 +64,9 @@ const createDiscount = async (req, res) => {
                 {
                     producto_id,
                     porcentaje,
-                    codigo,
-                    valido_desde,
-                    valido_hasta
+                    fecha_inicio: fecha_inicio || null,
+                    fecha_fin: fecha_fin || null,
+                    activo: true
                 }
             ])
             .select()
