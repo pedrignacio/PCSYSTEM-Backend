@@ -42,10 +42,12 @@ const statsRoutes = require('./src/routes/statsRoutes');
 const salesRoutes = require('./src/routes/salesRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const discountRoutes = require('./src/routes/discountRoutes');
+const haulmerRoutes = require('./src/routes/haulmerRoutes');
 
 // Usar Rutas
 app.use('/api/pcs', productRoutes);
 app.use('/api', paymentRoutes); // Ojo: create_preference estaba en /api/create_preference
+app.use('/api/haulmer', haulmerRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/contact', contactRoutes);
