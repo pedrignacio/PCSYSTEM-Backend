@@ -1,4 +1,71 @@
 const { client, Preference } = require('../config/mercadopago');
+const https = require('https');
+
+const mpGetMe = (accessToken) => {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'api.mercadopago.com',
+        path: '/users/me',
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+      (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          resolve({ status: res.statusCode || 0, body });
+        });
+      }
+    );
+
+    req.on('error', reject);
+    req.end();
+  });
+};
+
+const getMercadoPagoAccount = async (req, res) => {
+  try {
+    if (!process.env.MP_DIAGNOSTIC_TOKEN) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const providedToken = req.headers['x-diag-token'];
+    if (!providedToken || providedToken !== process.env.MP_DIAGNOSTIC_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!process.env.MP_ACCESS_TOKEN) {
+      return res.status(500).json({ error: 'MP_ACCESS_TOKEN no configurado' });
+    }
+
+    const { status, body } = await mpGetMe(process.env.MP_ACCESS_TOKEN);
+
+    if (status < 200 || status >= 300) {
+      return res.status(502).json({
+        error: 'No se pudo obtener la cuenta de Mercado Pago',
+        status,
+        details: body,
+      });
+    }
+
+    const data = JSON.parse(body);
+    return res.json({
+      id: data.id,
+      nickname: data.nickname,
+      email: data.email,
+      site_id: data.site_id,
+    });
+  } catch (error) {
+    console.error('❌ Error diagnóstico Mercado Pago:', error);
+    return res.status(500).json({ error: 'Error interno', details: error.message });
+  }
+};
 
 const createPreference = async (req, res) => {
   try {
@@ -49,4 +116,4 @@ const createPreference = async (req, res) => {
   }
 };
 
-module.exports = { createPreference };
+module.exports = { createPreference, getMercadoPagoAccount };
