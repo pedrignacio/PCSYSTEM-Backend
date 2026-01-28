@@ -43,6 +43,8 @@ const salesRoutes = require('./src/routes/salesRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const discountRoutes = require('./src/routes/discountRoutes');
 const haulmerRoutes = require('./src/routes/haulmerRoutes');
+const orderRoutes = require('./src/routes/orderRoutes');
+const webhookRoutes = require('./src/routes/webhookRoutes');
 
 // Usar Rutas
 app.use('/api/pcs', productRoutes);
@@ -55,6 +57,8 @@ app.use('/api/estadisticas', statsRoutes);
 app.use('/api/ventas', salesRoutes);
 app.use('/api/usuarios', userRoutes);
 app.use('/api/descuentos-productos', discountRoutes);
+app.use('/api/ordenes', orderRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Rutas básicas
 app.get('/', (req, res) => {

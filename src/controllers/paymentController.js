@@ -76,8 +76,10 @@ const createPreference = async (req, res) => {
       return res.status(500).json({ error: "Configuración de pago incompleta" });
     }
 
-    const { items } = req.body;
+    const { items, external_reference, order_id } = req.body;
     console.log("📦 Items recibidos:", JSON.stringify(items, null, 2));
+    console.log("🔖 External reference:", external_reference);
+    console.log("📋 Order ID:", order_id);
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: "El carrito está vacío" });
@@ -97,7 +99,35 @@ const createPreference = async (req, res) => {
         currency_id: 'CLP',
       })),
       back_urls: backUrls,
+      // External reference para identificar la orden en el webhook
+      external_reference: external_reference || order_id || `MP-${Date.now()}`,
       // Solo activar auto_return si NO es localhost (Mercado Pago valida esto estrictamente)
+      auto_return: process.env.NODE_ENV === 'production' ? 'approved' : undefined,
+      // Notification URL para webhooks
+      notification_url: process.env.MP_WEBHOOK_URL || `${process.env.BACKEND_URL || 'http://localhost:5000'}/api/webhooks/mercadopago`,
+    };
+
+    console.log("📤 Creando preferencia con body:", JSON.stringify(body, null, 2));
+
+    const preference = await Preference.create({ body });
+
+    console.log("✅ Preferencia creada exitosamente");
+    console.log("🆔 ID:", preference.id);
+    console.log("🔗 Init Point:", preference.init_point);
+
+    res.json({
+      id: preference.id,
+      init_point: preference.init_point,
+      sandbox_init_point: preference.sandbox_init_point,
+    });
+  } catch (error) {
+    console.error("❌ Error creando preferencia:", error);
+    res.status(500).json({ 
+      error: "Error al procesar el pago",
+      details: error.message 
+    });
+  }
+};
       auto_return: backUrls.success.includes('localhost') || backUrls.success.includes('127.0.0.1') 
         ? undefined 
         : 'approved',
