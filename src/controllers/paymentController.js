@@ -128,22 +128,5 @@ const createPreference = async (req, res) => {
     });
   }
 };
-      auto_return: backUrls.success.includes('localhost') || backUrls.success.includes('127.0.0.1') 
-        ? undefined 
-        : 'approved',
-    };
-
-    console.log("📤 Enviando a Mercado Pago:", JSON.stringify(body, null, 2));
-
-    const preference = new Preference(client);
-    const result = await preference.create({ body });
-
-    console.log("✅ Preferencia creada con éxito. ID:", result.id);
-    res.json({ id: result.id });
-  } catch (error) {
-    console.error("❌ Error detallado Mercado Pago:", error);
-    res.status(500).json({ error: 'Error al crear la preferencia', details: error.message });
-  }
-};
 
 module.exports = { createPreference, getMercadoPagoAccount };
