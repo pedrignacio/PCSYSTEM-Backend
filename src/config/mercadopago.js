@@ -6,4 +6,6 @@ const client = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN 
 });
 
-module.exports = { client, Preference };
+const preference = new Preference(client);
+
+module.exports = { client, preference };

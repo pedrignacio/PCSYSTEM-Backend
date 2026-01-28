@@ -1,4 +1,4 @@
-const { client, Preference } = require('../config/mercadopago');
+const { client, preference } = require('../config/mercadopago');
 const https = require('https');
 
 const mpGetMe = (accessToken) => {
@@ -109,15 +109,15 @@ const createPreference = async (req, res) => {
 
     console.log("📤 Creando preferencia con body:", JSON.stringify(body, null, 2));
 
-    const preference = await Preference.create({ body });
+    const result = await preference.create({ body });
 
     console.log("✅ Preferencia creada exitosamente");
-    console.log("🆔 ID:", preference.id);
-    console.log("🔗 Init Point:", preference.init_point);
+    console.log("🆔 ID:", result.id);
+    console.log("🔗 Init Point:", result.init_point);
 
     res.json({
-      id: preference.id,
-      init_point: preference.init_point,
+      id: result.id,
+      init_point: result.init_point,
       sandbox_init_point: preference.sandbox_init_point,
     });
   } catch (error) {
